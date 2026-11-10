@@ -183,13 +183,20 @@ Juice Shop es vulnerable a propósito; aquí van las vulnerabilidades **confirma
 |---|---|---|---|---|
 | SQL concatenado en el login | `routes/login.ts:34` | DF9, TB5 | Código / Semgrep | T-01 |
 | SQL concatenado en la búsqueda | `routes/search.ts:23` | DF11, TB5 | Código / Semgrep | T-05 |
-| Llave privada RS256 escrita en el código | `lib/insecurity.ts:21` | P3, TB4 | Código / Semgrep (secretos) | T-03 |
-| Hash de contraseñas MD5 sin sal | `lib/insecurity.ts:41` | D1 | Código / Semgrep | T-15 |
+| Llave privada RS256 escrita en el código | `lib/insecurity.ts:21` | P3, TB4 | Código / Semgrep `hardcoded-jwt-secret` en `:54`, donde se firma con esa llave (WARNING) | T-03 |
+| Hash de contraseñas MD5 sin sal | `lib/insecurity.ts:41` | D1 | Código (Semgrep **no** lo detecta) | T-15 |
 | Login sin rate limit | `server.ts:624` (solo `:371`, `:487` tienen límite) | P3, TB1→TB2 | Código | T-02, T-17 |
-| Listado de directorios en `/ftp`, `/encryptionkeys`, `/support/logs` | `server.ts:290-304` | P2 → D3 | Código / ZAP | T-12 |
+| Listado de directorios en `/ftp`, `/encryptionkeys`, `/support/logs` | `server.ts:290-304` | P2 → D3 | Código / Semgrep `express-check-directory-listing` (`server.ts:273, 294, 298, 302, 306`, WARNING). ZAP baseline no lo reportó | T-12 |
 | *(completar con el reconocimiento de Luis Pedro)* | | | Red Team | |
-| *(completar con npm audit: paquetes high/critical)* | `package.json` | Dependencias | Pipeline SCA | T-21 |
-| *(completar con alertas de ZAP baseline)* | | DF4 | Pipeline DAST | T-13, T-14 |
+| Dependencias JWT vulnerables: `jsonwebtoken` ≤8.5.1 (*Verification Bypass*, **critical**), `express-jwt` ≤7.7.7 (*Authorization bypass*, high), `jws` ≤3.2.2 (*Forgeable tokens*, high) | `package.json` | P3, TB4 | Pipeline SCA (npm audit) | T-03, T-21 |
+| `marsdb` (*Command Injection*, **critical**, sin versión corregida) | `package.json` | D2, DF12 | Pipeline SCA (npm audit) | T-07, T-21 |
+| `sanitize-html` ≤2.17.7 (*Improper Input Validation*, high) | `package.json` | P4 (reseñas, quejas) | Pipeline SCA (npm audit) | T-08, T-21 |
+| `crypto-js` ≤4.1.1 vía `pdfkit` (*PBKDF2 débil*, **critical**), `lodash` (*Prototype Pollution*, critical), `tar` (*path traversal*, critical), `moment` (ReDoS, high) | `package.json` | Dependencias | Pipeline SCA (npm audit) | T-21 |
+| **Total npm audit (`--omit=dev`):** 6 critical, 12 high, 7 moderate, 2 low | corrida [42892293620](https://github.com/Javilejoo/juice-shop/actions/runs/42892293620) | Dependencias | Pipeline SCA | T-21 |
+| Falta la cabecera **Content-Security-Policy** (ZAP 10038, Medium) en 5 URLs | Respuestas de la app | DF4 | Pipeline DAST (ZAP baseline) | T-08 |
+| **Cross-Domain Misconfiguration**: CORS permisivo (ZAP 10098, Medium) | Respuestas de la app | DF4 | Pipeline DAST (ZAP baseline) | T-13 |
+| Faltan `Cross-Origin-Embedder-Policy` / `Cross-Origin-Opener-Policy`; `Feature-Policy` obsoleta; funciones JS peligrosas (ZAP, Low) | Respuestas de la app | DF4 | Pipeline DAST (ZAP baseline) | T-13, T-14 |
+| **Total ZAP baseline:** 0 alto, 2 medio, 4 bajo, 3 informativos. No reportó divulgación de errores ni HSTS (escaneo pasivo sobre HTTP) | corrida [42892293620](https://github.com/Javilejoo/juice-shop/actions/runs/42892293620) | DF4 | Pipeline DAST | T-13, T-14 |
 
 ---
 
@@ -211,17 +218,19 @@ Cada requisito sale de una amenaza y dice **qué control lo comprueba** (pipelin
 
 | ID | Requisito | Amenaza que cubre | Control que lo comprueba | Cómo se comprueba después |
 |---|---|---|---|---|
-| RS-01 | Toda consulta SQL/NoSQL usa parámetros o el ORM; ningún dato del usuario se concatena | T-01, T-05, T-07 | **Pipeline** SAST Semgrep (`p/owasp-top-ten`, severidad ERROR) + **WAF** CRS 942\* + **Kibana** DET-01 | H2: Semgrep marca `login.ts:34` y `search.ts:23`. H3: DET-01 muestra los PoC. H4: Semgrep limpio y PoC falla |
-| RS-02 | Cada endpoint verifica en el servidor dueño del recurso y rol (deny-by-default); el `role` nunca se acepta del cliente | T-06, T-11, T-19, T-20 | **Revisión manual** + prueba de regresión en el pipeline (el WAF no lo ve: lógica de negocio) | H2: PoC IDOR/admin. H4: test de regresión falla antes y pasa después |
-| RS-03 | Salida codificada por contexto y Content-Security-Policy restrictiva | T-08 | **WAF** CRS 941\* + **Kibana** DET-02 + **Pipeline** ZAP (cabecera CSP) | H2: ZAP reporta falta de CSP. H3: DET-02 con hora y payload |
+| RS-01 | Toda consulta SQL/NoSQL usa parámetros o el ORM; ningún dato del usuario se concatena | T-01, T-05, T-07 | **Pipeline** SAST Semgrep (`express-sequelize-injection`, severidad ERROR → dispara el gate) + **Pipeline** SCA (`marsdb` critical) + **WAF** CRS 942\* + **Kibana** DET-01 | H2: ✅ Semgrep marca `login.ts:34` y `search.ts:23` como ERROR. H3: DET-01 muestra los PoC. H4: Semgrep limpio y PoC falla |
+| RS-02 | Cada endpoint verifica en el servidor dueño del recurso y rol (deny-by-default); el `role` nunca se acepta del cliente | T-06, T-11, T-19, T-20 | **Revisión manual** (ni el WAF ni el pipeline actual lo ven: lógica de negocio). En el H4 se agrega una prueba de regresión al pipeline | H2: PoC IDOR/admin. H4: test de regresión falla antes y pasa después |
+| RS-03 | Salida codificada por contexto y Content-Security-Policy restrictiva | T-08 | **WAF** CRS 941\* + **Kibana** DET-02 + **Pipeline** DAST ZAP (cabecera CSP) + **Pipeline** SCA (`sanitize-html`) | H2: ✅ ZAP reporta falta de CSP (10038, Medium); npm audit marca `sanitize-html` (high). H3: DET-02 con hora y payload |
 | RS-04 | Login y reset limitan intentos (5 fallidos por cuenta/IP en 15 min); reset no depende solo de la pregunta secreta | T-02, T-04, T-17 | **Kibana** DET-03 (ráfagas por IP) | H3: la ráfaga del Red Team aparece en DET-03 con su IP y hora |
-| RS-05 | JWT firmado con llave fuera del código; se valida firma, `alg`, expiración y emisor | T-03 | **Pipeline** SAST (detección de secretos / `jwt-hardcode`) | H2: Semgrep marca la llave en `insecurity.ts:21`. H4: llave movida a variable de entorno |
-| RS-06 | Contraseñas con bcrypt/Argon2 con sal; TLS 1.2+ en producción | T-14, T-15 | **Pipeline** SAST (MD5 débil) + ZAP (sin HSTS) | H2: hallazgos de Semgrep y ZAP documentados |
-| RS-07 | Carga y descarga con lista blanca de tipos, tamaño máximo, sin entidades XML externas; `/ftp` sin archivos confidenciales | T-12, T-16, T-18 | **WAF** CRS 930\* (path traversal) + **Pipeline** ZAP | H2/H3: PoC de `/ftp` aparece en logs del WAF |
-| RS-08 | Errores genéricos al usuario; detalle solo en logs | T-13 | **Pipeline** ZAP baseline (divulgación de errores) | H2: alertas de ZAP revisadas |
+| RS-05 | JWT firmado con llave fuera del código; se valida firma, `alg`, expiración y emisor | T-03 | **Pipeline** SAST Semgrep `hardcoded-jwt-secret` (WARNING: se reporta pero no dispara el gate, que corta en ERROR) + **Pipeline** SCA (`jsonwebtoken` critical, `express-jwt` y `jws` high) | H2: ✅ Semgrep marca `insecurity.ts:54` (firma con la llave definida en `:21`); npm audit marca `jsonwebtoken` ≤8.5.1 (*Verification Bypass*). H4: llave en variable de entorno y librerías actualizadas |
+| RS-06 | Contraseñas con bcrypt/Argon2 con sal; TLS 1.2+ en producción | T-14, T-15 | **Revisión de código** (Semgrep **no** detecta el MD5 de `insecurity.ts:41`) + **Pipeline** SCA (`crypto-js` critical, PBKDF2 débil). TLS/HSTS queda fuera del pipeline: el laboratorio corre por HTTP y ZAP solo revisa HSTS sobre HTTPS | H2: brecha documentada (el pipeline no cubre MD5 ni TLS). H4: hash con bcrypt verificado en revisión |
+| RS-07 | Carga y descarga con lista blanca de tipos, tamaño máximo, sin entidades XML externas; `/ftp` sin archivos confidenciales | T-12, T-16, T-18 | **WAF** CRS 930\* (path traversal) + **Pipeline** SAST Semgrep `express-check-directory-listing` (WARNING) + **Pipeline** SCA (`tar` critical, path traversal) | H2: ✅ Semgrep marca los listados de directorio en `server.ts` (`/ftp`, `/encryptionkeys`, `/support/logs`); ZAP baseline no los reportó. H3: PoC de `/ftp` aparece en logs del WAF |
+| RS-08 | Errores genéricos al usuario; detalle solo en logs | T-13 | **PoC del Red Team** + revisión de código. ZAP baseline **no** lo cubre: es pasivo y no envía payloads que provoquen errores | H2: el PoC de SQLi muestra el HTTP 500 con detalle del error. H4: respuesta genérica verificada |
 | RS-09 | Eventos de seguridad registrados (login, pedidos, errores de autorización) con usuario, IP y hora, sin contraseñas ni tarjetas | T-09, T-10 | **Kibana** (logs del WAF y de la app en Elastic) | H3: eventos visibles en el dashboard "WAF - Blue Team" |
 | RS-10 | El WAF inspecciona todo el tráfico y el SIEM tiene reglas SQLi, XSS y ráfagas, revisadas | T-10, T-17, T-22 | **WAF** en `On` + **Kibana** DET-01..03 | H3: las 3 reglas detectan los PoC reales; en `On` responden 403 |
-| RS-11 | Cada build genera SBOM y analiza dependencias; high/critical se reportan y luego bloquean | T-21 | **Pipeline** SCA (`npm audit --audit-level=high`) + SBOM Syft CycloneDX | H2: `sbom.cdx.json` como artefacto y reporte de npm audit |
+| RS-11 | Cada build genera SBOM y analiza dependencias; high/critical se reportan y luego bloquean | T-21 | **Pipeline** SCA (`npm audit --audit-level=high`) + **Pipeline** SBOM Syft CycloneDX | H2: ✅ `sbom.cdx.json` (CycloneDX 1.6, 539 componentes, 533 npm) como artefacto; npm audit: 6 critical, 12 high |
+
+> **Verificación de los controles del pipeline** (Javier, 2026-11-10): cada fila marcada con ✅ se comprobó contra los reportes de la corrida [42892293620](https://github.com/Javilejoo/juice-shop/actions/runs/42892293620) (`semgrep.sarif`, `npm-audit.json`, `sbom.cdx.json`, `reporte-zap.json`). Brechas encontradas: Semgrep no detecta el MD5 (RS-06); ZAP baseline no cubre divulgación de errores (RS-08) ni HSTS (RS-06); la llave JWT (RS-05) y los listados de directorio (RS-07) salen como WARNING, así que se reportan pero no disparan el gate.
 
 ---
 
