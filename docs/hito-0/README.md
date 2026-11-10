@@ -33,20 +33,20 @@ Navegador / Postman / ZAP / Burp ──► WAF :8080 (ModSecurity + OWASP CRS) �
 | Integrante | Equipo | Juice Shop + WAF | SIEM | Fecha |
 | --- | --- | --- | --- | --- |
 | Javier | Mac | ☐ | ☐ | |
-| Bryan | Mac | ☐ | ☐ | |
+| Bryan | Mac | ☑ | ☑ | 2026-11-10 |
 | Luispe | Windows | ☐ | n/a | |
 
 ## Evidencias (`docs/hito-0/img/`)
-- [ ] `01-docker-compose-ps.png`
+- [x] `01-docker-compose-ps.png` (Bryan)
 - [ ] `02-postman-health-waf.png`
 - [ ] `03-postman-login.png`
-- [ ] `04-kibana-discover.png`
-- [ ] `05-kibana-documento-modsec.png`
+- [x] `04-kibana-discover.png` (Bryan)
+- [x] `05-kibana-documento-modsec.png` (Bryan)
 
 ## Verificación de bypass
 | Prueba | Resultado esperado | Resultado obtenido |
 | --- | --- | --- |
-| `http://localhost:3000` (directo a Juice Shop) | No responde (Opción B) | |
+| `http://localhost:3000` (directo a Juice Shop) | No responde (Opción B) | Bryan, 2026-11-10: no responde. `docker compose ps` muestra `3000/tcp` sin puerto publicado al host (ver `img/01-docker-compose-ps.png`). Por `:8080` responde HTTP 200 |
 
 ## Modo del WAF
 `MODSEC_RULE_ENGINE=DetectionOnly` (H0–H2). Pasa a `On` en el H3.
@@ -57,4 +57,9 @@ Navegador / Postman / ZAP / Burp ──► WAF :8080 (ModSecurity + OWASP CRS) �
 - [ ] Workflows originales de Juice Shop desactivados/eliminados
 - [ ] Juice Shop responde por `:8080`
 - [ ] Eventos del WAF en Kibana
-- [ ] Bypass verificado y anotado
+- [x] Bypass verificado y anotado
+
+### Evidencia de Bryan (2026-11-10)
+- `verificar.sh todo`: Elasticsearch, Kibana, WAF (HTTP 200) y Filebeat en OK; data stream `.ds-filebeat-9.3.3-2026.11.10-000001`.
+- Prueba del CRS a las 16:20:32 (hora local): `GET /rest/products/search?q=' OR 1=1--` → el WAF en DetectionOnly la registra con una regla de `REQUEST-942-APPLICATION-ATTACK-SQLI` (`fields.fuente : "waf-audit"`, ver `img/04` y `img/05`) y la deja pasar (HTTP 500 de la app).
+- Nota: Filebeat 9 no lee un archivo hasta que pasa de 1024 bytes; con poco tráfico `verificar.sh filebeat` falla aunque todo esté bien. Ajuste propuesto: `prospector.scanner.fingerprint.length: 64` en los inputs de `waf-siem/filebeat.yml`.
