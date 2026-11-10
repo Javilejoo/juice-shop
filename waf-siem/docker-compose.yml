@@ -69,8 +69,10 @@ services:
   # Sin "ports:": Juice Shop SOLO es accesible a través del WAF (no hay bypass).
   # En .env:  APP_BACKEND=http://juice-shop:3000
   # H4 (corregir código): cambiar "image:" por "build: .." para usar el código del fork.
+  # Versión fijada por digest: 20.4.0-SNAPSHOT (la del fork), publicada como "latest" el
+  # 2026-11-08. Así el H1, los PoC, la demo y el DAST del pipeline usan la misma app.
   juice-shop:
-    image: bkimminich/juice-shop:latest
+    image: bkimminich/juice-shop@sha256:877fc77b12d72b42e486eb09b6b1711cc56514306d92006b284e7e7cf076a809
     restart: unless-stopped
     expose:
       - "3000"

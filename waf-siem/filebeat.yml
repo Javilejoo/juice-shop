@@ -1,10 +1,15 @@
 # Filebeat: envía los logs del WAF (y opcionalmente los de su app) a Elasticsearch
 filebeat.inputs:
+  # prospector.scanner.fingerprint.length: Filebeat 9 identifica cada archivo por sus
+  # primeros N bytes (1024 por defecto) y no lo lee hasta que alcanza ese tamaño.
+  # Con 64 (el mínimo) los logs del WAF se leen desde el primer request.
+
   # Log de acceso de nginx: una línea por request (URL con payloads codificados)
   - type: filestream
     id: waf-access
     paths:
       - /var/log/waf/access.log
+    prospector.scanner.fingerprint.length: 64
     fields:
       fuente: waf-access
 
@@ -13,6 +18,7 @@ filebeat.inputs:
     id: waf-audit
     paths:
       - /var/log/waf/modsec_audit.json
+    prospector.scanner.fingerprint.length: 64
     parsers:
       - ndjson:
           target: "modsec"

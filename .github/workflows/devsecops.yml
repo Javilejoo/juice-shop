@@ -129,8 +129,9 @@ jobs:
       # Juice Shop: se levanta con su imagen oficial (npm ci + build de Angular tarda >10 min).
       # H4: para escanear el código corregido del fork, cambiar por:
       #   docker build -t juice-fork . && docker run -d --name juice -p 3000:3000 juice-fork
+      # Misma imagen fijada que waf-siem/docker-compose.yml (20.4.0-SNAPSHOT, la del fork).
       - name: Levantar la aplicación
-        run: docker run -d --name juice -p 3000:3000 bkimminich/juice-shop:latest
+        run: docker run -d --name juice -p 3000:3000 bkimminich/juice-shop@sha256:877fc77b12d72b42e486eb09b6b1711cc56514306d92006b284e7e7cf076a809
       - name: Esperar a que la app responda
         run: |
           for i in $(seq 1 60); do
