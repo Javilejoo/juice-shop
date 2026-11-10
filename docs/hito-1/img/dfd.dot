@@ -1,0 +1,66 @@
+digraph DFD {
+  graph [rankdir=LR, fontname="Helvetica", fontsize=12, nodesep=0.45, ranksep=0.9, pad=0.3,
+         label="DFD · OWASP Juice Shop detrás de ModSecurity + OWASP CRS (laboratorio local del grupo)\nRectángulo = entidad externa · Elipse = proceso · Cilindro = almacén · Punteado rojo = límite de confianza",
+         labelloc=t, fontsize=14];
+  node  [fontname="Helvetica", fontsize=10];
+  edge  [fontname="Helvetica", fontsize=8, color="#444444"];
+
+  subgraph cluster_tb1 {
+    label="TB1 · Internet (no confiable)"; style="dashed"; color="#c0392b"; penwidth=2; fontcolor="#c0392b";
+    E1 [label="E1 Cliente\n(navegador + SPA Angular)", shape=box, style=filled, fillcolor="#eaf2fb"];
+    E3 [label="E3 Atacante\n(Red Team, solo instancia local)", shape=box, style=filled, fillcolor="#fdecea"];
+    subgraph cluster_tb4 {
+      label="TB4 · Usuario ↔ Administrador"; style="dashed"; color="#c0392b"; penwidth=2; fontcolor="#c0392b";
+      E2 [label="E2 Administrador", shape=box, style=filled, fillcolor="#eaf2fb"];
+    }
+  }
+
+  subgraph cluster_tb2 {
+    label="TB2 · Perímetro (host, 127.0.0.1:8080)"; style="dashed"; color="#c0392b"; penwidth=2; fontcolor="#c0392b";
+    P1 [label="P1 WAF\nModSecurity v3 + OWASP CRS\n(nginx, DetectionOnly → On)", shape=ellipse, style=filled, fillcolor="#fff4d6"];
+  }
+
+  subgraph cluster_app {
+    label="TB3 · Red interna Docker — aplicación Juice Shop (:3000 NO publicado)"; style="dashed"; color="#c0392b"; penwidth=2; fontcolor="#c0392b";
+    P2 [label="P2 Frontend\n(archivos estáticos SPA,\n/ftp, /assets)", shape=ellipse, style=filled, fillcolor="#e9f7ef"];
+    P3 [label="P3 Autenticación\n/rest/user/login, /api/Users,\nreset-password, 2FA · emite JWT RS256", shape=ellipse, style=filled, fillcolor="#e9f7ef"];
+    P4 [label="P4 API REST Node/Express\n/rest/* y /api/* (finale)", shape=ellipse, style=filled, fillcolor="#e9f7ef"];
+    P5 [label="P5 Carga de archivos\n/file-upload, /profile/image/*", shape=ellipse, style=filled, fillcolor="#e9f7ef"];
+
+    subgraph cluster_tb5 {
+      label="TB5 · Aplicación ↔ Datos"; style="dashed"; color="#c0392b"; penwidth=2; fontcolor="#c0392b";
+      D1 [label="D1 SQLite (Sequelize)\nUsers, Products, Baskets,\nCards, Addresses…", shape=cylinder, style=filled, fillcolor="#f2f2f2"];
+      D2 [label="D2 MarsDB (memoria)\nreseñas, pedidos", shape=cylinder, style=filled, fillcolor="#f2f2f2"];
+      D3 [label="D3 Archivos subidos\nuploads/, ftp/", shape=cylinder, style=filled, fillcolor="#f2f2f2"];
+    }
+  }
+
+  subgraph cluster_mon {
+    label="TB6 · Monitoreo Blue Team (solo localhost :5601)"; style="dashed"; color="#c0392b"; penwidth=2; fontcolor="#c0392b";
+    D4 [label="D4 Logs del WAF\naccess.log, modsec_audit.json", shape=cylinder, style=filled, fillcolor="#f2f2f2"];
+    P6 [label="P6 Filebeat", shape=ellipse, style=filled, fillcolor="#f3e9fb"];
+    D5 [label="D5 Elasticsearch", shape=cylinder, style=filled, fillcolor="#f2f2f2"];
+    P7 [label="P7 Kibana\n(reglas DET-01..03, dashboard)", shape=ellipse, style=filled, fillcolor="#f3e9fb"];
+    E4 [label="E4 Analista\nBlue Team", shape=box, style=filled, fillcolor="#eaf2fb"];
+  }
+
+  E1 -> P1 [label="DF1 HTTP: credenciales,\nbúsquedas, carrito, JWT"];
+  E2 -> P1 [label="DF2 HTTP: operaciones admin\n(JWT rol admin)"];
+  E3 -> P1 [label="DF3 HTTP: payloads\n(SQLi, XSS, ráfagas)", color="#c0392b", fontcolor="#c0392b"];
+  P1 -> E1 [label="DF4 respuestas / 403", style=dashed];
+  P1 -> P2 [label="DF5"];
+  P1 -> P3 [label="DF6 email, password"];
+  P1 -> P4 [label="DF7 JSON + Bearer JWT"];
+  P1 -> P5 [label="DF8 multipart"];
+  P3 -> D1 [label="DF9 SELECT usuario\n(SQL crudo)"];
+  P3 -> P1 [label="DF10 JWT firmado", style=dashed];
+  P4 -> D1 [label="DF11 SQL (ORM + crudo)"];
+  P4 -> D2 [label="DF12 consultas NoSQL"];
+  P5 -> D3 [label="DF13 escritura"];
+  P2 -> D3 [label="DF14 lectura"];
+  P1 -> D4 [label="DF15 eventos + ruleId"];
+  D4 -> P6 [label="DF16"];
+  P6 -> D5 [label="DF17 fields.fuente"];
+  D5 -> P7 [label="DF18 consultas"];
+  P7 -> E4 [label="DF19 alertas"];
+}
