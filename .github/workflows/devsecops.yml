@@ -101,6 +101,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Sin lockfile ni node_modules, Syft solo inventaría las GitHub Actions del workflow.
+      # Se genera el lockfile (igual que en SCA) para que el SBOM liste las dependencias npm.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Generar lockfile
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
       - name: Generar SBOM
         uses: anchore/sbom-action@v0
         with:
