@@ -1,0 +1,166 @@
+{
+  "info": {
+    "name": "JuiceShop-WAF",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Proyecto Final Integrador · OWASP Juice Shop detrás del WAF. Solo instancia local, solo cuentas de prueba."
+  },
+  "item": [
+    {
+      "name": "0 · Verificación",
+      "item": [
+        {
+          "name": "Health a través del WAF",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/rest/admin/application-version"
+            },
+            "description": "200 = el WAF llega a Juice Shop. 502 = revisar APP_BACKEND."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Health directo a la app (bypass)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url_directo}}/rest/admin/application-version"
+            },
+            "description": "Con la Opción B NO debe responder. Si da 200, es un hallazgo: el WAF se puede saltar."
+          }
+        }
+      ]
+    },
+    {
+      "name": "1 · Tráfico legítimo",
+      "item": [
+        {
+          "name": "Login de prueba",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/rest/user/login"
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{demo_email}}\",\"password\":\"{{demo_password}}\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json(); if (j.authentication) pm.environment.set('token', j.authentication.token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar productos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/Products"
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Buscar productos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/rest/products/search?q=apple"
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2 · PoC (Red Team)",
+      "item": [
+        {
+          "name": "PoC 1",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}{{poc_1}}"
+            },
+            "description": "Pegar ruta+payload ya confirmado en Burp. Anotar la HORA para el Blue Team."
+          }
+        },
+        {
+          "name": "PoC 2",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}{{poc_2}}"
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "PoC 3",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}{{poc_3}}"
+            },
+            "description": ""
+          }
+        }
+      ]
+    }
+  ]
+}

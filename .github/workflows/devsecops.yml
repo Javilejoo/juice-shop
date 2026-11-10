@@ -1,0 +1,152 @@
+# =====================================================================
+# Pipeline DevSecOps — Proyecto Final Integrador (Hito 2) · OWASP Juice Shop
+# Adaptado de la plantilla del curso (ajustes con asistente de IA, revisados por el grupo)
+# =====================================================================
+# Copien este archivo a .github/workflows/devsecops.yml en su repositorio
+# y ajusten las secciones marcadas con  >>> AJUSTAR <<<.
+#
+# Pueden pedirle a un asistente de IA que haga ese ajuste sobre su repo.
+# En Secure CRM se hizo con Cursor: leyó el lockfile y cómo arranca la app,
+# y reescribió solo esas secciones. El grupo revisa el resultado. El caso
+# resuelto y la checklist están en la guía del curso, referencia del pipeline.
+#
+# Controles:   SAST (Semgrep) · SCA (auditoría de dependencias) ·
+#              SBOM (Syft, CycloneDX) · DAST (ZAP baseline)
+#
+# El baseline es el control automático del grupo. La sesión de escritorio
+# del Equipo rojo (ZAP + Burp contra localhost:8080) se entrega además
+# en docs/hito-2.
+#
+# Security gate:
+#   SECURITY_GATE: "reporte"  -> el pipeline corre los controles y publica
+#                                los reportes, pero NO falla (así se empieza).
+#   SECURITY_GATE: "bloqueo"  -> el pipeline falla si un control supera su
+#                                umbral. Documenten y justifiquen los umbrales.
+#
+# Umbrales de esta plantilla (pueden cambiarlos, justificándolo):
+#   SAST: hallazgos de severidad ERROR · SCA: vulnerabilidades high o critical
+#   DAST: alertas de ZAP de riesgo alto
+# =====================================================================
+name: DevSecOps
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  SECURITY_GATE: "reporte"          # >>> AJUSTAR <<<  "reporte" o "bloqueo"
+
+jobs:
+  # ── SAST ───────────────────────────────────────────────────────────
+  sast:
+    name: SAST (Semgrep)
+    runs-on: ubuntu-latest
+    container: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v4
+      - name: Semgrep (reporte SARIF)
+        run: semgrep scan --config p/default --config p/owasp-top-ten --sarif --output semgrep.sarif
+      - name: Semgrep (gate)
+        continue-on-error: ${{ env.SECURITY_GATE != 'bloqueo' }}
+        run: semgrep scan --config p/default --config p/owasp-top-ten --severity ERROR --error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: semgrep
+          path: semgrep.sarif
+
+  # ── SCA ────────────────────────────────────────────────────────────
+  sca:
+    name: SCA (dependencias)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # >>> AJUSTAR <<<  dejen el bloque de su gestor de paquetes y borren el otro.
+      # Si su proyecto está en una subcarpeta (p. ej. api/), agreguen  working-directory: api
+      # --- Node (npm) ---
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Juice Shop no versiona package-lock.json (.npmrc: package-lock=false) y
+      # npm audit lo necesita: se genera solo el lockfile, sin instalar ni correr scripts.
+      - name: Generar lockfile
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Auditoría (reporte)
+        run: npm audit --omit=dev --json > npm-audit.json || true
+      - name: Auditoría (gate)
+        continue-on-error: ${{ env.SECURITY_GATE != 'bloqueo' }}
+        run: npm audit --omit=dev --audit-level=high
+      # --- Python (pip) ---
+      # - uses: actions/setup-python@v5
+      #   with:
+      #     python-version: "3.12"
+      # - name: Auditoría (reporte)
+      #   run: pip install pip-audit && pip-audit -r requirements.txt -f json -o pip-audit.json || true
+      # - name: Auditoría (gate)
+      #   continue-on-error: ${{ env.SECURITY_GATE != 'bloqueo' }}
+      #   run: pip-audit -r requirements.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sca
+          path: "*-audit.json"
+
+  # ── SBOM ───────────────────────────────────────────────────────────
+  sbom:
+    name: SBOM (Syft, CycloneDX)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generar SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          artifact-name: sbom.cdx.json      # queda como artefacto del pipeline
+
+  # ── DAST ───────────────────────────────────────────────────────────
+  # ZAP baseline: control automático del grupo. La sesión de escritorio del
+  # Equipo rojo (ZAP + Burp contra http://localhost:8080) se entrega además,
+  # en docs/hito-2, junto con este artefacto.
+  dast:
+    name: DAST (ZAP baseline)
+    runs-on: ubuntu-latest
+    env:
+      APP_URL: http://localhost:3000     # >>> AJUSTAR <<<  URL de su app dentro del runner
+    steps:
+      - uses: actions/checkout@v4
+      # Juice Shop: se levanta con su imagen oficial (npm ci + build de Angular tarda >10 min).
+      # H4: para escanear el código corregido del fork, cambiar por:
+      #   docker build -t juice-fork . && docker run -d --name juice -p 3000:3000 juice-fork
+      - name: Levantar la aplicación
+        run: docker run -d --name juice -p 3000:3000 bkimminich/juice-shop:latest
+      - name: Esperar a que la app responda
+        run: |
+          for i in $(seq 1 60); do
+            curl -sf "$APP_URL" > /dev/null && exit 0
+            sleep 2
+          done
+          echo "La app no respondió en $APP_URL"; docker logs juice; exit 1
+      - name: ZAP baseline
+        run: |
+          mkdir -p zap && chmod 777 zap
+          docker run --rm --network host -v "$PWD/zap:/zap/wrk:rw" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py -t "$APP_URL" -r reporte-zap.html -J reporte-zap.json -I \
+            || echo "ZAP terminó con hallazgos"
+      - name: ZAP (gate)
+        continue-on-error: ${{ env.SECURITY_GATE != 'bloqueo' }}
+        run: |
+          # Falla si ZAP reportó alertas de riesgo alto (riskcode 3)
+          altos=$(jq '[.site[].alerts[] | select(.riskcode == "3")] | length' zap/reporte-zap.json)
+          echo "Alertas de riesgo alto: $altos"
+          test "$altos" -eq 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap
+          path: zap/
