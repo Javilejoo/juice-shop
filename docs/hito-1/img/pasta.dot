@@ -1,0 +1,26 @@
+digraph PASTA {
+  graph [rankdir=TB, fontname="Helvetica", nodesep=0.5, ranksep=0.35, pad=0.3,
+         label="PASTA aplicado a Juice Shop · STRIDE dentro de la etapa 4", labelloc=t, fontsize=16];
+  node  [fontname="Helvetica", fontsize=12, shape=box, style="rounded,filled", width=4.6, height=0.75, penwidth=0.8];
+  edge  [color="#555555", arrowsize=0.7];
+
+  s1 [label=<<b>1 · Objetivos de negocio</b><br/><font point-size="10">Activos, impacto CIA, apetito de riesgo · H1</font>>, fillcolor="#E1F5EE", color="#0F6E56"];
+  s2 [label=<<b>2 · Alcance técnico</b><br/><font point-size="10">Stack, fuera de alcance, supuestos · H1</font>>, fillcolor="#E1F5EE", color="#0F6E56"];
+  s3 [label=<<b>3 · Descomposición</b><br/><font point-size="10">DFD, límites de confianza, 13 entradas · H1</font>>, fillcolor="#E1F5EE", color="#0F6E56"];
+  s4 [label=<<b>4 · Análisis de amenazas</b><br/><font point-size="10">Agentes + STRIDE: 22 amenazas con riesgo · H1</font>>, fillcolor="#E1F5EE", color="#0F6E56"];
+  s5 [label=<<b>5 · Vulnerabilidades</b><br/><font point-size="10">Líneas de código, recon, pipeline · H1</font>>, fillcolor="#E1F5EE", color="#0F6E56"];
+  s6 [label=<<b>6 · Simulación de ataques</b><br/><font point-size="10">PoC del Red Team · H2</font>>, fillcolor="#FAECE7", color="#993C1D"];
+  s7 [label=<<b>7 · Riesgo e impacto</b><br/><font point-size="10">Riesgo residual · informe final</font>>, fillcolor="#FAECE7", color="#993C1D"];
+  stride [label=<<b>STRIDE</b><br/><font point-size="10">Por componente del DFD</font>>, fillcolor="#EEEDFE", color="#534AB7", width=2.2];
+
+  s1 -> s2 -> s3 -> s4 -> s5 -> s6 -> s7;
+  stride -> s4 [constraint=false];
+  { rank=same; s4; stride; }
+
+  legend [shape=plaintext, style="", label=<<table border="0" cellspacing="6"><tr>
+    <td bgcolor="#E1F5EE" width="14"> </td><td align="left"><font point-size="10">Hecho en el H1</font></td>
+    <td bgcolor="#FAECE7" width="14"> </td><td align="left"><font point-size="10">Hitos siguientes</font></td>
+    <td bgcolor="#EEEDFE" width="14"> </td><td align="left"><font point-size="10">Herramienta dentro de PASTA</font></td>
+  </tr></table>>];
+  s7 -> legend [style=invis];
+}

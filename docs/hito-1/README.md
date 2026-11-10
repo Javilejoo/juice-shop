@@ -9,7 +9,7 @@ Integrantes y roles:
 | Nombre | Rol |
 |---|---|
 | Luis Pedro Montenegro | Equipo rojo |
-| Bryan España | Equipo azul — dueño del H1, umbral del gate y documento del H2 |
+| Bryan España | Equipo azul —  H1, umbral del gate y documento del H2 |
 | Javier Prado | Equipo azul — entorno, pipeline DevSecOps |
 
 > El grupo tiene 3 integrantes: 2 en Blue Team (el bloque con más infraestructura: WAF, SIEM, pipeline) y 1 en Red Team.
@@ -54,7 +54,7 @@ Integrantes y roles:
 
 ## STRIDE
 
-Una amenaza por letra, cada una sobre un componente del DFD. La evidencia en código es del fork (`juice-shop` v20.3.0).
+Una amenaza por letra, cada una sobre un componente del DFD. La evidencia en código es del fork (`juice-shop` 20.4.0-SNAPSHOT, la misma versión fijada por digest en `waf-siem/docker-compose.yml` y en el DAST).
 
 | Letra | Amenaza | Componente | Control |
 |---|---|---|---|
@@ -70,6 +70,10 @@ El análisis extendido (22 amenazas con probabilidad × impacto, OWASP 2025 y CW
 ---
 
 ## PASTA
+
+![Flujo de PASTA aplicado a Juice Shop](img/pasta.png)
+
+Las etapas 1 a 5 se desarrollan en este hito; STRIDE es la técnica que usamos dentro de la etapa 4, aplicada a cada componente del DFD. La etapa 6 se cierra con los PoC del H2 y la 7 con el riesgo residual del informe final.
 
 ### Etapa 1 · Objetivos del negocio
 
