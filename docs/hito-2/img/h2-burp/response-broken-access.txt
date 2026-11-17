@@ -1,0 +1,16 @@
+HTTP/1.1 200 OK
+Date: Tue, 17 Nov 2026 05:34:18 GMT
+Content-Type: application/json; charset=utf-8
+Content-Length: 747
+Connection: keep-alive
+Access-Control-Allow-Origin: *
+X-Content-Type-Options: nosniff
+X-Frame-Options: SAMEORIGIN
+Feature-Policy: payment 'self'
+X-Recruiting: /#/jobs
+ETag: W/"2eb-vFkCZKhJZPQTR07o6yQNLanIMwI"
+Vary: Accept-Encoding
+Server: nginx
+Access-Control-Allow-Headers: *
+
+{"status":"success","data":{"id":7,"coupon":null,"UserId":27,"createdAt":"2026-11-17T05:24:02.283Z","updatedAt":"2026-11-17T05:24:02.283Z","Products":[{"id":1,"name":"Apple Juice (1000ml)","description":"The all-time classic.","price":1.99,"deluxePrice":0.99,"image":"apple_juice.jpg","alternateImages":[{"file":"apple_juice-1x.avif","format":"image/avif","density":"1x"},{"file":"apple_juice-2x.avif","format":"image/avif","density":"2x"},{"file":"apple_juice-3x.avif","format":"image/avif","density":"3x"}],"createdAt":"2026-11-16T03:30:43.119Z","updatedAt":"2026-11-16T03:30:43.119Z","deletedAt":null,"BasketItem":{"ProductId":1,"BasketId":7,"id":9,"quantity":1,"createdAt":"2026-11-17T05:24:06.140Z","updatedAt":"2026-11-17T05:24:22.736Z"}}]}}
