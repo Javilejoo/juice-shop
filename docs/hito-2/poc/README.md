@@ -150,10 +150,10 @@ Desde Burp Repeater se capturó una petición autenticada a un carrito y se camb
 
 Las cuatro PoC cubren los casos de abuso priorizados del H1. Para cerrar el H2 aún se debe:
 
-1. Exportar y añadir el reporte del Spider y Active Scan de ZAP.
-2. Repetir PoC-03 con hora UTC registrada.
-3. Repetir PoC-04 mostrando el `bid` de ambas cuentas de prueba y ocultando el JWT.
-4. Repetir las PoC seleccionadas desde Postman contra la instancia de Javier, registrar las horas y entregarlas al Blue Team para la correlación en Kibana.
+
+1. Repetir PoC-03 con hora UTC registrada.
+2. Repetir PoC-04 mostrando el `bid` de ambas cuentas de prueba y ocultando el JWT.
+3. Repetir las PoC seleccionadas desde Postman contra la instancia de Javier, registrar las horas y entregarlas al Blue Team para la correlación en Kibana.
 
 ## Referencias
 
