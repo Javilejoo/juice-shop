@@ -8,7 +8,7 @@
 |---|---|---|---|---|---|---|---|
 | PoC-01 | CA-01 / T-01 | SQLi en login | `POST /rest/user/login` | El payload emitió una autenticación con `umail: admin@juice-sh.op` | A05 Injection | CWE-89 | 9.1 Critical |
 | PoC-02 | CA-02 / T-05 | SQLi en búsqueda | `GET /rest/products/search?q=` | La alteración de `q` devolvió el catálogo completo en vez de limitarse a la búsqueda | A05 Injection | CWE-89 | 7.5 High |
-| PoC-03 | CA-03 / T-08 | DOM XSS en búsqueda | `/#/search?q=` | Se ejecutó `alert('xss')` en el navegador | A05 Injection | CWE-79 | 6.1 Medium |
+| PoC-03b | CA-03 / T-08 | XSS reflejado en rastreo de pedidos | `GET /rest/track-order/:id` | El payload se refleja desde el servidor y se pinta en el navegador | A05 Injection | CWE-79 | 6.1 Medium |
 | PoC-04 | CA-04 / T-11 | Acceso directo a objeto (IDOR) | `GET /rest/basket/:id` | La respuesta devolvió el carrito `id: 7` asociado a `UserId: 27` | A01 Broken Access Control | CWE-639 | 6.5 Medium |
 
 ## Reglas de evidencia
@@ -82,18 +82,24 @@ En Burp Repeater se sustituyó el valor de `q` por una entrada de terminación d
 
 ---
 
-## PoC-03 · DOM XSS en búsqueda
+## PoC-03b · XSS reflejado en rastreo de pedidos
 
-**Caso de abuso:** CA-03 · **Amenaza:** T-08 · **Vector:** parámetro `q` en la ruta Angular `/#/search`.
+> Este PoC **reemplaza** al DOM XSS previo de búsqueda. El anterior se procesaba por completo en el navegador, con el payload después de `#`, y no generaba un evento HTTP útil para el WAF o DET-02.
+
+**Caso de abuso:** CA-03 · **Amenaza:** T-08 · **Vector inicial:** parámetro `id` de la ruta Angular `/#/track-result`.
 
 ### Procedimiento y resultado
 
-Se cargó la búsqueda con un payload HTML que crea un `iframe` cuyo origen JavaScript muestra `alert('xss')`. El navegador ejecutó la alerta y mostró el texto `xss`, por lo que el contenido controlado por el usuario alcanzó un *sink* HTML ejecutable.
+Se abre en el navegador, con Burp configurado como proxy, la ruta `/#/track-result` con un valor `id` que contiene el iframe del caso de abuso. El frontend codifica el valor y llama a `GET /rest/track-order/<payload>`. El servidor devuelve el `orderId` recibido y el componente lo inserta como HTML confiable, por lo que el navegador ejecuta `alert('xss')`.
 
-- **Hora:** no quedó registrada en la captura; debe anotarse al repetir la prueba para la correlación del H3.
-- **Impacto demostrado:** ejecución de JavaScript en el contexto de `localhost:8080`.
-- **Nota WAF:** al ser un DOM XSS con el payload en el fragmento después de `#`, ese fragmento no viaja al servidor por HTTP. Por ello el WAF puede no registrar el payload aunque la ejecución esté confirmada en el navegador.
-- **Evidencia:** [alerta XSS en la búsqueda](../img/h2-burp/poc-xss-search.png).
+```text
+http://localhost:8080/#/track-result?id=<iframe src="javascript:alert(`xss`)">
+```
+
+- **Ruta que debe aparecer en Burp/Repeater:** `GET /rest/track-order/<payload>`.
+- **Resultado esperado en `DetectionOnly`:** `200 OK`, alerta `xss` en el navegador y eventos CRS `941160`, `941170`, `941210` y `941390` para DET-02.
+- **Resultado esperado con el WAF en `On`:** `403 Forbidden`.
+- **Hora y evidencia:** pendientes de registrar con la repetición del PoC-03b. La captura existente `poc-xss-search.png` corresponde al PoC DOM retirado y no se usa como evidencia de esta variante.
 
 ### Clasificación
 
@@ -104,7 +110,7 @@ Se cargó la búsqueda con un payload HTML que crea un `iframe` cuyo origen Java
 | Métrica | Valor | Justificación |
 |---|---|---|
 | AV | N | El payload llega mediante una URL abierta en el navegador. |
-| AC | L | Solo requiere formar la URL o escribir el valor en la búsqueda. |
+| AC | L | Solo requiere formar la URL con el valor controlado en `id`. |
 | PR | N | No requiere una cuenta para la prueba mostrada. |
 | UI | R | Una víctima debe abrir la URL o visualizar el contenido. |
 | S | C | El script se ejecuta en el contexto del navegador de la víctima. |
@@ -151,7 +157,7 @@ Desde Burp Repeater se capturó una petición autenticada a un carrito y se camb
 Las cuatro PoC cubren los casos de abuso priorizados del H1. Para cerrar el H2 aún se debe:
 
 
-1. Repetir PoC-03 con hora UTC registrada.
+1. Ejecutar PoC-03b, guardar una captura del navegador y de Burp Repeater, y registrar su hora UTC y los eventos CRS 941*.
 2. Repetir PoC-04 mostrando el `bid` de ambas cuentas de prueba y ocultando el JWT.
 3. Repetir las PoC seleccionadas desde Postman contra la instancia de Javier, registrar las horas y entregarlas al Blue Team para la correlación en Kibana.
 
