@@ -54,15 +54,34 @@ Columnas de las reglas: `ruleId` (qué regla del CRS saltó), `request.uri` (a q
 
 > **Matiz importante (defensa en profundidad).** Al revisar el código confirmamos que, bajo Docker, el reto *Reflected XSS* está deshabilitado (`disabledEnv: [Docker, Heroku]` con `safetyMode: auto`). Por eso `routes/trackOrder.ts` aplica `.replace(/[^\w-]+/g, '')` y la respuesta refleja el valor **sin** caracteres HTML (p. ej. `iframesrcjavascriptalertxss`), de modo que **no se ejecuta `alert('xss')`**. Lo que DET-02 aporta no es menos valioso: **el WAF sí ve e identifica el intento** (reglas 941) aunque la app lo neutralice. Es el ejemplo de defensa en profundidad del H3 — app saneando + WAF detectando. El XSS reflejado queda como **riesgo residual documentado** (no se habilita el reto en la instancia compartida).
 
-### DET-03 · Ráfagas o escaneo por IP *(Bryan)*
+### DET-03 · Ráfagas o escaneo por IP
 
 | | |
 |---|---|
-| **Consulta (ES\|QL)** | *(pegar la consulta final con el umbral ajustado)* |
-| **Qué detecta** | |
-| **Umbral y justificación** | *(eventos por minuto de un usuario normal vs. un escaneo)* |
-| **PoC que detecta** | |
+| **Consulta (ES\|QL)** | Ver el bloque de abajo |
+| **Qué detecta** | Una IP que genera más de 20 eventos del WAF en un mismo minuto |
+| **Umbral y justificación** | Más de 20 eventos por IP y por minuto. Ver la explicación de abajo |
+| **PoC que detecta** | Ráfaga del Red Team del 18-nov a las 18:58: 80 eventos en un minuto |
 | **Requisito / caso de abuso** | RS-04, RS-10 · CA-05 |
+
+```sql
+FROM filebeat-*
+| WHERE fields.fuente == "waf-audit"
+| EVAL minuto = DATE_TRUNC(1 minute, @timestamp)
+| STATS peticiones = COUNT(*) BY minuto, modsec.transaction.client_ip
+| WHERE peticiones > 20
+| SORT peticiones DESC
+```
+
+**Cómo funciona.** A diferencia de DET-01 y DET-02, esta regla no busca un payload sino un comportamiento. Agrupa los eventos del log de auditoría del WAF por minuto y por IP de origen, y muestra solo los grupos que pasan de 20. Se usa ES|QL porque KQL no puede contar ni agrupar.
+
+**Por qué el umbral es 20 por minuto.** El log de auditoría (`waf-audit`) no guarda todo el tráfico: registra las transacciones que disparan alguna regla del CRS o que terminan en error. Una persona que usa la tienda con normalidad casi no genera eventos ahí, porque registro, login, búsqueda y carrito no disparan reglas (sección 3). Un escáner o una herramienta automática, en cambio, prueba muchas rutas y payloads seguidos, y cada intento sospechoso o fallido queda registrado. La ráfaga del Red Team generó 80 eventos en un minuto, cuatro veces el umbral. El valor 20 deja margen para un usuario que comete algunos errores y aun así marca cualquier escaneo automatizado.
+
+**Hallazgo al calibrar el umbral.** En la captura aparecen también siete minutos entre las 07:31 y las 07:39 con 24 a 36 eventos desde `172.18.0.1`. No son un ataque: es el ensayo del modo `On` de Javier usando la tienda como cliente normal, y coinciden con el falso positivo de socket.io (más de 200 bloqueos de la regla 920420 en diez minutos, sección 3). Es decir, antes de la exclusión `10003` un usuario legítimo superaba el umbral solo por el reintento de las notificaciones. Con la exclusión aplicada ese tráfico deja de generar eventos, y DET-03 queda calibrada para marcar solo ráfagas reales. Es un ejemplo de cómo un falso positivo del WAF se propaga a las reglas del SIEM.
+
+**Limitaciones.**
+- Un escaneo lento, por debajo de 20 eventos por minuto, no salta. Para eso habría que agregar una ventana más larga, por ejemplo una hora.
+- Con Docker Desktop en Mac, las conexiones que llegan desde otra máquina se ven con la IP del gateway de Docker (`192.168.65.1`), no con la IP real del atacante. Por eso la ráfaga del Red Team aparece con esa IP. En el laboratorio basta, pero en producción el WAF tendría que recibir la IP real del cliente, por ejemplo con `X-Forwarded-For` desde un balanceador de confianza.
 
 ![Regla DET-03 ráfagas](img/04-regla-det-03-rafagas.png)
 
@@ -125,16 +144,41 @@ Consulta para verlos en Discover: `fields.fuente : "waf-audit" and modsec.transa
 
 ---
 
-## 4. Exclusiones mínimas *(Bryan)*
+## 4. Exclusiones mínimas
 
-Archivo: [`waf-siem/waf/REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf`](../../waf-siem/waf/REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf). La exclusión `10001` (Host `127.0.0.1`, regla 920350) viene del H0.
+Archivo: [`waf-siem/waf/REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf`](../../waf-siem/waf/REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf). La exclusión `10001` (Host `127.0.0.1`, regla 920350) viene del H0. Ninguna exclusión toca la 949110 ni apaga una familia completa del CRS.
 
-| ID | Regla | Ruta · parámetro | Tipo | Por qué es legítimo | Riesgo que se acepta |
+| ID | Regla | Ruta y alcance | Tipo | Por qué es un falso positivo | Riesgo que se acepta |
 |---|---|---|---|---|---|
-| 10002 | 932260 | `/rest/user/whoami` · `REQUEST_FILENAME` | | | |
-| 10003 | 920420 | `/socket.io/` | | | |
+| 10002 | 932260 (RCE, comandos Unix) | `/rest/user/whoami`, ruta exacta. Solo se quita el objetivo `REQUEST_FILENAME` | 1 | Es la ruta de la API que devuelve el usuario logueado. La regla ve la palabra `whoami` en la ruta y la confunde con el comando de Unix | En esa ruta la 932260 no revisa el nombre de la ruta. Los parámetros y headers siguen inspeccionados por todas las reglas, incluida la 932260 |
+| 10003 | 920420 (Content-Type no permitido) | `/socket.io/`, ruta exacta, solo `POST` y solo con `Content-Type` que empieza con `text/plain` | 2 acotada | El polling de socket.io envía sus mensajes como `text/plain`, que no está en la lista de tipos permitidos del CRS | **Riesgo residual.** El CRS no tiene procesador de cuerpo para `text/plain`, así que el contenido de esas peticiones no llega a las reglas 942 ni 941 |
 
-*(Verificación: la acción legítima ya no da 403 y el mismo ataque en esa ruta sigue dando 403.)*
+**Por qué la 10003 no quita solo un objetivo.** La 920420 revisa únicamente el header `Content-Type`, así que quitarle ese objetivo equivale a quitar la regla completa. Para que la exclusión sea mínima se limitó con una cadena de tres condiciones: ruta exacta, método `POST` y `text/plain`. Si cambia cualquiera de las tres, la 920420 vuelve a aplicar.
+
+**Análisis del riesgo de la 10003.** Lo comprobamos enviando `POST /socket.io/` con `Content-Type: text/plain` y el payload `' OR 1=1--` en el body, con el WAF en `DetectionOnly`: en Kibana solo saltaron 920420 y 949110, ninguna 942. Antes de la exclusión esa petición se bloqueaba igual por la 920420; después pasa sin que el CRS mire su contenido. Aceptamos el riesgo porque está limitado a esa ruta exacta y porque revisamos el código del servidor de socket.io (`lib/startup/registerWebsocketEvents.ts`): los mensajes solo se comparan contra listas en memoria, con `includes` y una expresión regular, y nunca se usan en una consulta a la base de datos. Queda en el riesgo residual del informe final.
+
+### Verificación en modo `On`
+
+Después de editar el archivo: `docker compose restart waf` con `MODSEC_RULE_ENGINE=On`. Para cada exclusión se comprueba que la acción legítima ya no se bloquea y que un ataque en la misma ruta sigue dando 403.
+
+| # | Prueba | Resultado esperado | Resultado obtenido |
+|---|---|---|---|
+| 1 | Usar la tienda logueado: el carrito muestra el correo y no aparecen 403 en `/rest/user/whoami` ni en `/socket.io/` | Sin 403 | |
+| 2 | `GET /rest/user/whoami?x=;cat /etc/passwd` | 403 | |
+| 3 | `POST /socket.io/` con `text/plain` y `' OR 1=1--` en el body | Sin 403 del WAF; en Kibana sin 920420 ni 949110 | |
+| 4 | `POST /socket.io/` con `application/json` y el mismo payload | 403 | |
+| 5 | `GET /socket.io/?q=' OR 1=1--` | 403 | |
+| 6 | `POST /rest/user/login` con `text/plain` y el mismo payload, para confirmar que la exclusión no se amplió a otras rutas | 403 | |
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" -G "http://127.0.0.1:8080/rest/user/whoami" --data-urlencode "x=;cat /etc/passwd"
+curl -s -o /dev/null -w "%{http_code}\n" -X POST "http://127.0.0.1:8080/socket.io/" -H "Content-Type: text/plain" --data "' OR 1=1--"
+curl -s -o /dev/null -w "%{http_code}\n" -X POST "http://127.0.0.1:8080/socket.io/" -H "Content-Type: application/json" --data "{\"q\":\"' OR 1=1--\"}"
+curl -s -o /dev/null -w "%{http_code}\n" -G "http://127.0.0.1:8080/socket.io/" --data-urlencode "q=' OR 1=1--"
+curl -s -o /dev/null -w "%{http_code}\n" -X POST "http://127.0.0.1:8080/rest/user/login" -H "Content-Type: text/plain" --data "' OR 1=1--"
+```
+
+La prueba 3 puede devolver un 400 de la propia aplicación, porque socket.io no reconoce ese body. Lo que importa es que no sea un 403 del WAF.
 
 ![Exclusión aplicada y acción legítima respondiendo](img/07-exclusion-falso-positivo.png)
 
@@ -167,3 +211,4 @@ Archivo: [`waf-siem/waf/REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf`](../../waf-
 | Reglas DET-01/DET-02 y dashboard | **Claude Code** (Anthropic) | Guiar la creación de las búsquedas guardadas y los paneles en Kibana | Pasos en Kibana y consultas KQL por familia del CRS | Javier creó las reglas y el dashboard en su Kibana y comprobó los resultados con los payloads de los PoC |
 | Análisis del ensayo en modo `On` | **Claude Code** (Anthropic) | Revisar los eventos del WAF de la prueba con la tienda | Identificó los dos falsos positivos (932260 en `whoami`, 920420 en `socket.io`) consultando Elasticsearch | Javier los confirmó en Discover (captura `07a`) |
 | Redacción de las secciones 1–3 de este documento | **Claude Code** (Anthropic) | Redactar a partir del trabajo hecho en Kibana | Texto y tablas de las secciones 1–3 | Javier y Bryan revisaron el contenido |
+| DET-03 y exclusiones 10002/10003 | **Claude** (Anthropic) | Revisar la propuesta de exclusiones, el criterio de prueba y documentar DET-03 | Ajustes a la exclusión 10003 y a las pruebas en modo `On`, revisión del código de socket.io y redacción de DET-03 y la sección 4 | Bryan y Javier discutieron y acordaron la versión final de la 10003; Bryan revisó el texto |
