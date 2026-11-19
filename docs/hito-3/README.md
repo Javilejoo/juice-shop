@@ -125,7 +125,15 @@ Se cambia `MODSEC_RULE_ENGINE=On` en `waf-siem/.env` y se recrea el contenedor (
 
 ![WAF en modo On: SQLi con 403 y búsqueda legítima con 200](img/06-waf-403-bloqueo.png)
 
-*(Agregar aquí la pasada de bloqueo del Red Team: cada PoC con su respuesta 403.)*
+**Pasada de bloqueo del Red Team (2026-11-19).** Luis Pedro reenvió sus PoC desde su equipo contra el WAF de Javier a través de una red privada Tailscale, con el motor en `On`. Los tres terminaron en **403**:
+
+| PoC | Petición | Hora (UTC) | Reglas | Resultado |
+|---|---|---|---|---|
+| PoC-01 (SQLi login) | `POST /rest/user/login` con `' OR 1=1--` | 11:51:08 | 942100, 949110 | **403** bloqueado |
+| PoC-02 (SQLi búsqueda) | `GET /rest/products/search?q='))--` | 11:53:12 | 942100, 949110 | **403** bloqueado |
+| PoC-03b (XSS rastreo) | `GET /rest/track-order/<iframe src="javascript:alert(\`xss\`)">` | 11:53:26 | 941160, 941170, 941210, 941390, 949110 | **403** bloqueado |
+
+Evidencia: `img/06-waf-403-bloqueo.png` (Kibana, lado del Blue Team) y las capturas de Postman del Red Team (`img/postman-sqli-login-403.png`, `img/postman-sqli-products-403.png`, `img/postman-xss-403.png`). El origen se registra como `192.168.65.1`, la puerta de enlace de Docker Desktop: por el NAT de Docker en macOS la IP real del atacante no llega al contenedor. Se documenta como limitación del entorno; la correlación con el Red Team se hace por la hora.
 
 ### Falsos positivos encontrados en el ensayo
 
@@ -163,12 +171,12 @@ Después de editar el archivo: `docker compose restart waf` con `MODSEC_RULE_ENG
 
 | # | Prueba | Resultado esperado | Resultado obtenido |
 |---|---|---|---|
-| 1 | Usar la tienda logueado: el carrito muestra el correo y no aparecen 403 en `/rest/user/whoami` ni en `/socket.io/` | Sin 403 | |
-| 2 | `GET /rest/user/whoami?x=;cat /etc/passwd` | 403 | |
-| 3 | `POST /socket.io/` con `text/plain` y `' OR 1=1--` en el body | Sin 403 del WAF; en Kibana sin 920420 ni 949110 | |
-| 4 | `POST /socket.io/` con `application/json` y el mismo payload | 403 | |
-| 5 | `GET /socket.io/?q=' OR 1=1--` | 403 | |
-| 6 | `POST /rest/user/login` con `text/plain` y el mismo payload, para confirmar que la exclusión no se amplió a otras rutas | 403 | |
+| 1 | Usar la tienda logueado: el carrito muestra el correo y no aparecen 403 en `/rest/user/whoami` ni en `/socket.io/` | Sin 403 | **200** en `/rest/user/whoami`, sin 403 ✅ |
+| 2 | `GET /rest/user/whoami?x=;cat /etc/passwd` | 403 | **403** ✅ |
+| 3 | `POST /socket.io/` con `text/plain` y `' OR 1=1--` en el body | Sin 403 del WAF; en Kibana sin 920420 ni 949110 | **400** de la app (no 403 del WAF) ✅ |
+| 4 | `POST /socket.io/` con `application/json` y el mismo payload | 403 | **403** ✅ |
+| 5 | `GET /socket.io/?q=' OR 1=1--` | 403 | **403** ✅ |
+| 6 | `POST /rest/user/login` con `text/plain` y el mismo payload, para confirmar que la exclusión no se amplió a otras rutas | 403 | **403** ✅ |
 
 ```bash
 curl -s -o /dev/null -w "%{http_code}\n" -G "http://127.0.0.1:8080/rest/user/whoami" --data-urlencode "x=;cat /etc/passwd"
