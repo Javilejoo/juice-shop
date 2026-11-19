@@ -203,9 +203,18 @@ La prueba 3 puede devolver un 400 de la propia aplicación, porque socket.io no 
 
 ---
 
-## 6. Demo Purple Team *(pendiente)*
+## 6. Demo Purple Team
 
-*(PoC elegido, hora, evidencia de la detección en la regla y del 403 en modo `On`.)*
+**PoC elegido:** PoC-01, SQLi en el login (`POST /rest/user/login` con `' OR 1=1--`).
+
+**Flujo de la demo (Purple Team):**
+1. **Red Team (Luis Pedro)** lanza el ataque desde su equipo contra el WAF de Javier, a través de la red privada Tailscale (`http://100.x.x.x:8080/rest/user/login`), con el motor en `On`.
+2. **Blue Team (Javier)** muestra en Kibana (búsqueda **DET-01 SQLi**) que el ataque se **detectó** en ese mismo momento (regla **942100**) y que el WAF lo **bloqueó** (**403**, regla 949110).
+3. Se explica que en el **H4** la vulnerabilidad se corrige en el código (consulta parametrizada), no solo en el WAF.
+
+**Evidencia (2026-11-19, 16:07 GT):** el ataque a `/rest/user/login` con `ARGS:json.email: ' OR 1=1--` disparó las reglas `920350, 942100, 949110` y terminó en **403**. Consulta usada: `fields.fuente : "waf-audit" and modsec.transaction.response.http_code : 403`.
+
+![Demo: SQLi en el login detectado (942100) y bloqueado con 403](img/09-demo-sqli-login-403.png)
 
 ## 7. Registro de ataques del Red Team *(Luis Pedro)*
 
