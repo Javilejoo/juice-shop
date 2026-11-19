@@ -8,7 +8,7 @@
 |---|---|---|---|---|---|---|---|---|---|
 | PoC-01 | CA-01 / T-01 | SQLi en login | `POST /rest/user/login` | El payload emitió una autenticación con `umail: admin@juice-sh.op` | 11:53 | `403 Forbidden` al reenviar la prueba | A05 Injection | CWE-89 | 9.1 Critical |
 | PoC-02 | CA-02 / T-05 | SQLi en búsqueda | `GET /rest/products/search?q=` | La alteración de `q` devolvió el catálogo completo en vez de limitarse a la búsqueda | 11:53 | `403 Forbidden` al reenviar la prueba | A05 Injection | CWE-89 | 7.5 High |
-| PoC-03b | CA-03 / T-08 | XSS reflejado en rastreo de pedidos | `GET /rest/track-order/:id` | El payload se refleja desde el servidor y se pinta en el navegador | 11:53 | `403 Forbidden` al reenviar la prueba | A05 Injection | CWE-79 | 6.1 Medium |
+| PoC-03b | CA-03 / T-08 | Riesgo potencial de XSS reflejado en rastreo de pedidos | `GET /rest/track-order/:id` | No se confirmó la ejecución en el navegador; queda como riesgo residual sujeto a permisos y a validación posterior | 11:53 | `403 Forbidden` al reenviar la prueba | A05 Injection | CWE-79 | 6.1 Medium (potencial) |
 | PoC-04 | CA-04 / T-11 | Acceso directo a objeto (IDOR) | `GET /rest/basket/:id` | La respuesta devolvió el carrito `id: 7` asociado a `UserId: 27` | — | — | A01 Broken Access Control | CWE-639 | 6.5 Medium |
 
 ## Reglas de evidencia
@@ -91,22 +91,21 @@ En Burp Repeater se sustituyó el valor de `q` por una entrada de terminación d
 
 ### Procedimiento y resultado
 
-Se abre en el navegador, con Burp configurado como proxy, la ruta `/#/track-result` con un valor `id` que contiene el iframe del caso de abuso. El frontend codifica el valor y llama a `GET /rest/track-order/<payload>`. El servidor devuelve el `orderId` recibido y el componente lo inserta como HTML confiable, por lo que el navegador ejecuta `alert('xss')`.
+Se intentó abrir en el navegador, con Burp configurado como proxy, la ruta `/#/track-result` con un valor `id` que contiene el iframe del caso de abuso. El frontend codifica el valor y llama a `GET /rest/track-order/<payload>`. La configuración y permisos actuales del entorno no habilitaron la ejecución del contenido, por lo que **no se observó ni se acredita un `alert('xss')`**. El caso queda documentado como riesgo residual de XSS reflejado que requiere validación en un entorno autorizado donde el reto esté habilitado.
 
 ```text
 http://localhost:8080/#/track-result?id=<iframe src="javascript:alert(`xss`)">
 ```
 
 - **Ruta que debe aparecer en Burp/Repeater:** `GET /rest/track-order/<payload>`.
-- **Resultado esperado en `DetectionOnly`:** `200 OK`, alerta `xss` en el navegador y eventos CRS `941160`, `941170`, `941210` y `941390` para DET-02.
-- **Resultado esperado con el WAF en `On`:** `403 Forbidden`.
-- **Hora y evidencia:** pendientes de registrar con la repetición del PoC-03b. La captura existente `poc-xss-search.png` corresponde al PoC DOM retirado y no se usa como evidencia de esta variante.
+- **Resultado observado con el WAF en `On`:** `403 Forbidden` a las 11:53 UTC al reenviar la prueba.
+- **Evidencia de ejecución:** no disponible. La captura existente `poc-xss-search.png` corresponde al PoC DOM retirado y no se usa como evidencia de esta variante.
 
 ### Clasificación
 
 - **OWASP Top 10:2025:** A05 — Injection.
 - **CWE:** CWE-79 — Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting').
-- **CVSS v3.1:** `CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N` — **6.1 Medium**.
+- **CVSS v3.1 (riesgo potencial; no explotación confirmada):** `CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N` — **6.1 Medium**.
 
 | Métrica | Valor | Justificación |
 |---|---|---|
@@ -114,10 +113,10 @@ http://localhost:8080/#/track-result?id=<iframe src="javascript:alert(`xss`)">
 | AC | L | Solo requiere formar la URL con el valor controlado en `id`. |
 | PR | N | No requiere una cuenta para la prueba mostrada. |
 | UI | R | Una víctima debe abrir la URL o visualizar el contenido. |
-| S | C | El script se ejecuta en el contexto del navegador de la víctima. |
-| C | L | Puede acceder a información expuesta a la sesión de la víctima. |
-| I | L | Puede modificar la interfaz o realizar acciones como la víctima. |
-| A | N | La PoC no afecta disponibilidad. |
+| S | C | Si el riesgo se materializara, el script se ejecutaría en el contexto del navegador de la víctima. |
+| C | L | Podría acceder a información expuesta a la sesión de la víctima. |
+| I | L | Podría modificar la interfaz o realizar acciones como la víctima. |
+| A | N | El escenario potencial no afecta disponibilidad. |
 
 ---
 
@@ -158,7 +157,7 @@ Desde Burp Repeater se capturó una petición autenticada a un carrito y se camb
 Las cuatro PoC cubren los casos de abuso priorizados del H1. Para cerrar el H2 aún se debe:
 
 
-1. Ejecutar PoC-03b, guardar una captura del navegador y de Burp Repeater, y registrar su hora UTC y los eventos CRS 941*.
+1. Validar PoC-03b únicamente en un entorno autorizado donde el reto esté habilitado; guardar la captura del navegador y de Burp Repeater, y registrar su hora UTC y los eventos CRS 941*.
 2. Repetir PoC-04 mostrando el `bid` de ambas cuentas de prueba y ocultando el JWT.
 3. Repetir las PoC seleccionadas desde Postman contra la instancia de Javier, registrar las horas y entregarlas al Blue Team para la correlación en Kibana.
 
