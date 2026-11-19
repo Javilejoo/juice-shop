@@ -52,6 +52,8 @@ Columnas de las reglas: `ruleId` (qué regla del CRS saltó), `request.uri` (a q
 
 **Por qué DET-02 usa el PoC-03b y no el PoC-03.** El PoC-03 del H2 es un **DOM XSS** en `/#/search?q=`: el frontend de Juice Shop descarga todos los productos (`search('')`) y filtra en el navegador, así que el payload **nunca viaja al servidor** y el WAF no puede verlo. Lo comprobamos enviando el payload exacto: no apareció ningún evento. Por eso el Red Team confirmó un XSS que sí pasa por el servidor: en `/#/track-result?id=<payload>` el frontend llama a `GET /rest/track-order/<payload>`, el WAF lo inspecciona y DET-02 lo detecta.
 
+> **Matiz importante (defensa en profundidad).** Al revisar el código confirmamos que, bajo Docker, el reto *Reflected XSS* está deshabilitado (`disabledEnv: [Docker, Heroku]` con `safetyMode: auto`). Por eso `routes/trackOrder.ts` aplica `.replace(/[^\w-]+/g, '')` y la respuesta refleja el valor **sin** caracteres HTML (p. ej. `iframesrcjavascriptalertxss`), de modo que **no se ejecuta `alert('xss')`**. Lo que DET-02 aporta no es menos valioso: **el WAF sí ve e identifica el intento** (reglas 941) aunque la app lo neutralice. Es el ejemplo de defensa en profundidad del H3 — app saneando + WAF detectando. El XSS reflejado queda como **riesgo residual documentado** (no se habilita el reto en la instancia compartida).
+
 ### DET-03 · Ráfagas o escaneo por IP *(Bryan)*
 
 | | |
