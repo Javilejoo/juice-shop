@@ -8,7 +8,6 @@
 
 ![Data view filebeat-* con los eventos del WAF](img/01-data-view-filebeat.png)
 
-> **Estado de las capturas:** la `02`, `03`, `05` y `06` se tomaron con los payloads exactos de los PoC de Luis Pedro, enviados desde la Mac de Javier. Se reemplazan por las de la pasada de detección del Red Team (por el WAF de Javier en el hotspot), para que se vean su hora y su IP. *(Quitar esta nota cuando estén las definitivas.)*
 
 ---
 
@@ -127,7 +126,7 @@ Se cambia `MODSEC_RULE_ENGINE=On` en `waf-siem/.env` y se recrea el contenedor (
 
 **Pasada de bloqueo del Red Team (2026-11-19).** Luis Pedro reenvió sus PoC desde su equipo contra el WAF de Javier a través de una red privada Tailscale, con el motor en `On`. Los tres terminaron en **403**:
 
-| PoC | Petición | Hora (UTC) | Reglas | Resultado |
+| PoC | Petición | Hora (GT, UTC−6) | Reglas | Resultado |
 |---|---|---|---|---|
 | PoC-01 (SQLi login) | `POST /rest/user/login` con `' OR 1=1--` | 11:51:08 | 942100, 949110 | **403** bloqueado |
 | PoC-02 (SQLi búsqueda) | `GET /rest/products/search?q='))--` | 11:53:12 | 942100, 949110 | **403** bloqueado |
@@ -167,13 +166,13 @@ Archivo: [`waf-siem/waf/REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf`](../../waf-
 
 ### Verificación en modo `On`
 
-Después de editar el archivo: `docker compose restart waf` con `MODSEC_RULE_ENGINE=On`. Para cada exclusión se comprueba que la acción legítima ya no se bloquea y que un ataque en la misma ruta sigue dando 403.
+Después de editar el archivo: `docker compose restart waf` con `MODSEC_RULE_ENGINE=On`. Para cada exclusión se comprueba que la acción legítima ya no se bloquea y que un ataque en la misma ruta sigue dando 403. Verificación ejecutada el **2026-11-19** con el motor en `On`:
 
 | # | Prueba | Resultado esperado | Resultado obtenido |
 |---|---|---|---|
 | 1 | Usar la tienda logueado: el carrito muestra el correo y no aparecen 403 en `/rest/user/whoami` ni en `/socket.io/` | Sin 403 | **200** en `/rest/user/whoami`, sin 403 ✅ |
 | 2 | `GET /rest/user/whoami?x=;cat /etc/passwd` | 403 | **403** ✅ |
-| 3 | `POST /socket.io/` con `text/plain` y `' OR 1=1--` en el body | Sin 403 del WAF; en Kibana sin 920420 ni 949110 | **400** de la app (no 403 del WAF) ✅ |
+| 3 | `POST /socket.io/` con `text/plain` y `' OR 1=1--` en el body | Sin 403 del WAF; en Kibana sin 920420 ni 949110 | **400** de la app (no 403 del WAF); confirmado en Kibana: **0 eventos** para esa petición (ni 920420 ni 949110) ✅ |
 | 4 | `POST /socket.io/` con `application/json` y el mismo payload | 403 | **403** ✅ |
 | 5 | `GET /socket.io/?q=' OR 1=1--` | 403 | **403** ✅ |
 | 6 | `POST /rest/user/login` con `text/plain` y el mismo payload, para confirmar que la exclusión no se amplió a otras rutas | 403 | **403** ✅ |
@@ -188,7 +187,7 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST "http://127.0.0.1:8080/rest/use
 
 La prueba 3 puede devolver un 400 de la propia aplicación, porque socket.io no reconoce ese body. Lo que importa es que no sea un 403 del WAF.
 
-![Exclusión aplicada y acción legítima respondiendo](img/07-exclusion-falso-positivo.png)
+*(Captura `07-exclusion-falso-positivo.png` pendiente: la exclusión aplicada y la acción legítima respondiendo sin 403.)*
 
 ---
 
@@ -196,7 +195,7 @@ La prueba 3 puede devolver un 400 de la propia aplicación, porque socket.io no 
 
 [`waf-siem/kibana-export.ndjson`](../../waf-siem/kibana-export.ndjson): reglas DET-01, DET-02, DET-03 y el dashboard "WAF - Blue Team", exportados desde Stack Management → Saved Objects con *Include related objects*. Se importan en otro Kibana desde la misma pantalla (**Import**).
 
-![Export de los saved objects](img/08-saved-objects-export.png)
+*(Captura `08-saved-objects-export.png` pendiente: la pantalla de Saved Objects con los objetos exportados.)*
 
 ---
 
