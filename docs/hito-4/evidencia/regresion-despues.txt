@@ -1,0 +1,104 @@
+$ git log --oneline -1 && git status --short routes/
+ec3f07bee H4: pruebas de regresión de FIX-01, FIX-02 y FIX-03 (fallan antes de la corrección: 8 de 8 ataques, 3 controles pasan)
+ M routes/basket.ts
+ M routes/login.ts
+ M routes/search.ts
+$ node --import ./test/api/helpers/test-env.mjs --import tsx --test --test-force-exit test/api/regresion-h4-sqli.test.ts test/api/regresion-h4-idor.test.ts
+# Ejecutado: 2026-11-19 17:55 hora de Guatemala, código CORREGIDO (FIX-01, FIX-02, FIX-03)
+TAP version 13
+# Subtest: FIX-03 · PoC-04 IDOR en GET /rest/basket/:id
+    # Subtest: el usuario A no puede leer el carrito del usuario B (403, sin datos)
+    ok 1 - el usuario A no puede leer el carrito del usuario B (403, sin datos)
+      ---
+      duration_ms: 11.890791
+      type: 'test'
+      ...
+    # Subtest: variante: un carrito que no existe también responde 403
+    ok 2 - variante: un carrito que no existe también responde 403
+      ---
+      duration_ms: 6.156875
+      type: 'test'
+      ...
+    # Subtest: variante: el id con texto agregado no engaña la comparación
+    ok 3 - variante: el id con texto agregado no engaña la comparación
+      ---
+      duration_ms: 6.667875
+      type: 'test'
+      ...
+    # Subtest: control: el usuario A sigue viendo su propio carrito (200)
+    ok 4 - control: el usuario A sigue viendo su propio carrito (200)
+      ---
+      duration_ms: 30.973375
+      type: 'test'
+      ...
+    1..4
+ok 1 - FIX-03 · PoC-04 IDOR en GET /rest/basket/:id
+  ---
+  duration_ms: 548.357709
+  type: 'suite'
+  ...
+# Subtest: FIX-01 · PoC-01 SQLi en POST /rest/user/login
+    # Subtest: el payload del PoC-01 en el email no inicia sesión (401, sin token)
+    ok 1 - el payload del PoC-01 en el email no inicia sesión (401, sin token)
+      ---
+      duration_ms: 26.447876
+      type: 'test'
+      ...
+    # Subtest: variante: comentar la contraseña con un email conocido no inicia sesión
+    ok 2 - variante: comentar la contraseña con un email conocido no inicia sesión
+      ---
+      duration_ms: 18.976542
+      type: 'test'
+      ...
+    # Subtest: control: el login legítimo sigue funcionando (200 con token)
+    ok 3 - control: el login legítimo sigue funcionando (200 con token)
+      ---
+      duration_ms: 28.006167
+      type: 'test'
+      ...
+    1..3
+ok 2 - FIX-01 · PoC-01 SQLi en POST /rest/user/login
+  ---
+  duration_ms: 523.522208
+  type: 'suite'
+  ...
+# Subtest: FIX-02 · PoC-02 SQLi en GET /rest/products/search
+    # Subtest: el payload del PoC-02 q='))-- se trata como texto y no devuelve productos
+    ok 1 - el payload del PoC-02 q='))-- se trata como texto y no devuelve productos
+      ---
+      duration_ms: 7.662
+      type: 'test'
+      ...
+    # Subtest: variante: UNION SELECT contra Users no filtra correos ni hashes
+    ok 2 - variante: UNION SELECT contra Users no filtra correos ni hashes
+      ---
+      duration_ms: 8.966542
+      type: 'test'
+      ...
+    # Subtest: variante: q='; no rompe la consulta ni expone el error de SQLite
+    ok 3 - variante: q='; no rompe la consulta ni expone el error de SQLite
+      ---
+      duration_ms: 13.865125
+      type: 'test'
+      ...
+    # Subtest: control: la búsqueda legítima sigue funcionando
+    ok 4 - control: la búsqueda legítima sigue funcionando
+      ---
+      duration_ms: 10.939291
+      type: 'test'
+      ...
+    1..4
+ok 3 - FIX-02 · PoC-02 SQLi en GET /rest/products/search
+  ---
+  duration_ms: 41.757875
+  type: 'suite'
+  ...
+1..3
+# tests 11
+# suites 3
+# pass 11
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1425.969709
