@@ -187,7 +187,9 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST "http://127.0.0.1:8080/rest/use
 
 La prueba 3 puede devolver un 400 de la propia aplicación, porque socket.io no reconoce ese body. Lo que importa es que no sea un 403 del WAF.
 
-*(Captura `07-exclusion-falso-positivo.png` pendiente: la exclusión aplicada y la acción legítima respondiendo sin 403.)*
+**Evidencia en el WAF de Bryan (2026-11-19, 13:23 a 13:38 hora de Guatemala, modo `On`).** Se usó la tienda como el usuario semilla `jim@juice-sh.op`: login, carrito y compra completa. Las notificaciones de retos resueltos llegaron por socket.io, lo que confirma la exclusión `10003`, y la compra salió a nombre de Jim, lo que confirma que `/rest/user/whoami` responde y que la `10002` funciona. En el mismo intervalo, el único 403 en Kibana fue el ataque `GET /rest/user/whoami?x=;cat /etc/passwd` a las 13:35:43, bloqueado por las reglas 930120 (acceso a archivos del sistema) y 932160 (comando de shell Unix), que suman puntaje en la 949110. Es decir, la `10002` solo quitó la ruta de la 932260 y el resto del CRS sigue protegiendo ese endpoint.
+
+![Exclusión aplicada: compra como Jim y notificaciones sin 403, y en Kibana solo el ataque bloqueado](img/07-exclusion-falso-positivo.png)
 
 ---
 
