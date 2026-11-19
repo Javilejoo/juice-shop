@@ -4,16 +4,17 @@
 
 ## Resumen y trazabilidad
 
-| PoC | Caso de abuso | Hallazgo | Endpoint o vector | Resultado observado | OWASP 2025 | CWE | CVSS v3.1 |
-|---|---|---|---|---|---|---|---|
-| PoC-01 | CA-01 / T-01 | SQLi en login | `POST /rest/user/login` | El payload emitió una autenticación con `umail: admin@juice-sh.op` | A05 Injection | CWE-89 | 9.1 Critical |
-| PoC-02 | CA-02 / T-05 | SQLi en búsqueda | `GET /rest/products/search?q=` | La alteración de `q` devolvió el catálogo completo en vez de limitarse a la búsqueda | A05 Injection | CWE-89 | 7.5 High |
-| PoC-03b | CA-03 / T-08 | XSS reflejado en rastreo de pedidos | `GET /rest/track-order/:id` | El payload se refleja desde el servidor y se pinta en el navegador | A05 Injection | CWE-79 | 6.1 Medium |
-| PoC-04 | CA-04 / T-11 | Acceso directo a objeto (IDOR) | `GET /rest/basket/:id` | La respuesta devolvió el carrito `id: 7` asociado a `UserId: 27` | A01 Broken Access Control | CWE-639 | 6.5 Medium |
+| PoC | Caso de abuso | Hallazgo | Endpoint o vector | Resultado observado | Hora (UTC) | WAF | OWASP 2025 | CWE | CVSS v3.1 |
+|---|---|---|---|---|---|---|---|---|---|
+| PoC-01 | CA-01 / T-01 | SQLi en login | `POST /rest/user/login` | El payload emitió una autenticación con `umail: admin@juice-sh.op` | 11:53 | `403 Forbidden` al reenviar la prueba | A05 Injection | CWE-89 | 9.1 Critical |
+| PoC-02 | CA-02 / T-05 | SQLi en búsqueda | `GET /rest/products/search?q=` | La alteración de `q` devolvió el catálogo completo en vez de limitarse a la búsqueda | 11:53 | `403 Forbidden` al reenviar la prueba | A05 Injection | CWE-89 | 7.5 High |
+| PoC-03b | CA-03 / T-08 | XSS reflejado en rastreo de pedidos | `GET /rest/track-order/:id` | El payload se refleja desde el servidor y se pinta en el navegador | 11:53 | `403 Forbidden` al reenviar la prueba | A05 Injection | CWE-79 | 6.1 Medium |
+| PoC-04 | CA-04 / T-11 | Acceso directo a objeto (IDOR) | `GET /rest/basket/:id` | La respuesta devolvió el carrito `id: 7` asociado a `UserId: 27` | — | — | A01 Broken Access Control | CWE-639 | 6.5 Medium |
 
 ## Reglas de evidencia
 
 - Las horas se toman de la cabecera HTTP `Date` y se expresan en UTC.
+- La columna **WAF** registra el resultado del reenvío de bloqueo: PoC-01, PoC-02 y PoC-03b terminaron con `403 Forbidden` a las 11:53 UTC. PoC-04 no se reenvió. Los resultados observados describen las evidencias previas obtenidas antes del bloqueo.
 - Los JWT de laboratorio que aparecen en las capturas **no se transcriben** aquí. Antes de compartir este documento fuera del equipo, deben redactarse de las imágenes.
 - Una alerta del WAF o un HTTP 500 demuestra detección o error, pero no por sí sola una extracción de datos. La conclusión de cada PoC se limita a lo que muestran sus evidencias.
 
