@@ -16,6 +16,13 @@ export function retrieveBasket () {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       const id = req.params.id
+      // H4 FIX-03: solo el dueño puede leer su carrito. El id debe ser un número entero
+      // y coincidir con el carrito (bid) del usuario del token; si no, 403 sin consultar.
+      const user = security.authenticatedUsers.from(req)
+      if (!user?.bid || !/^\d+$/.test(String(id)) || user.bid !== parseInt(String(id), 10)) {
+        res.status(403).json({ status: 'error', error: 'Forbidden' })
+        return
+      }
       const basket = await BasketModel.findOne({ where: { id }, include: [{ model: ProductModel, paranoid: false, as: 'Products' }] })
       /* jshint eqeqeq:false */
       challengeUtils.solveIf(challenges.basketAccessChallenge, () => {

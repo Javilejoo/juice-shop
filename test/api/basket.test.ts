@@ -46,30 +46,33 @@ void describe('/rest/basket/:id', () => {
     assert.equal(res.status, 401)
   })
 
-  void it('GET empty basket when requesting non-existing basket id', async () => {
+  void it('GET non-existing basket id is forbidden because it is not the own basket (H4 FIX-03)', async () => {
     const res = await request(app).get('/rest/basket/4711').set(authHeader)
-    assert.equal(res.status, 200)
-    assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.ok(res.body.data === null || (typeof res.body.data === 'object' && Object.keys(res.body.data).length === 0))
+    assert.equal(res.status, 403)
+    assert.equal(res.body?.data, undefined)
   })
 
-  void it('GET existing basket with contained products by id', async () => {
-    const res = await request(app).get('/rest/basket/1').set(authHeader)
+  void it('GET existing basket with contained products by id as its owner (H4 FIX-03)', async () => {
+    const { token } = await login(app, {
+      email: 'admin@' + config.get<string>('application.domain'),
+      password: 'admin123'
+    })
+    const res = await request(app).get('/rest/basket/1').set({ Authorization: 'Bearer ' + token })
     assert.equal(res.status, 200)
     assert.ok(res.headers['content-type']?.includes('application/json'))
     assert.equal(res.body.data.id, 1)
     assert.equal(res.body.data.Products.length, 3)
   })
 
-  void it('GET basket should accept forged JWTs', async () => {
+  void it('GET basket with forged unsigned JWT is forbidden (H4 FIX-03)', async () => {
     const header = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url')
     const payload = Buffer.from(JSON.stringify({ data: { email: 'jim@juice-sh.op' }, iat: 1508639612, exp: 9999999999 })).toString('base64url')
     const unsignedToken = `${header}.${payload}.`
     const res = await request(app)
       .get('/rest/basket/1')
       .set({ Authorization: 'Bearer ' + unsignedToken, 'content-type': 'application/json' })
-    assert.equal(res.status, 200)
-    assert.ok(res.headers['content-type']?.includes('application/json'))
+    // El token falsificado no está entre los usuarios autenticados, así que no tiene carrito propio
+    assert.equal(res.status, 403)
   })
 })
 
@@ -109,7 +112,7 @@ void describe('/api/Baskets/:id', () => {
 })
 
 void describe('/rest/basket/:id', () => {
-  void it('GET existing basket of another user', async () => {
+  void it('GET existing basket of another user is forbidden (H4 FIX-03, PoC-04)', async () => {
     const { token } = await login(app, {
       email: 'bjoern.kimminich@gmail.com',
       password: 'bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI='
@@ -117,9 +120,8 @@ void describe('/rest/basket/:id', () => {
     const res = await request(app)
       .get('/rest/basket/2')
       .set({ Authorization: 'Bearer ' + token })
-    assert.equal(res.status, 200)
-    assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(res.body.data.id, 2)
+    assert.equal(res.status, 403)
+    assert.equal(res.body?.data, undefined)
   })
 })
 
