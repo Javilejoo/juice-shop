@@ -197,7 +197,9 @@ La prueba 3 puede devolver un 400 de la propia aplicación, porque socket.io no 
 
 [`waf-siem/kibana-export.ndjson`](../../waf-siem/kibana-export.ndjson): reglas DET-01, DET-02, DET-03 y el dashboard "WAF - Blue Team", exportados desde Stack Management → Saved Objects con *Include related objects*. Se importan en otro Kibana desde la misma pantalla (**Import**).
 
-*(Captura `08-saved-objects-export.png` pendiente: la pantalla de Saved Objects con los objetos exportados.)*
+**Prueba de portabilidad (2026-11-19, 13:44 hora de Guatemala).** El archivo del repo se importó en el Kibana de Bryan, que no tenía ninguno de estos objetos: entraron los 5 como nuevos (el dashboard, el data view `filebeat-*` y las tres reglas) sin referencias faltantes. Después se volvieron a exportar las tres reglas y el dashboard con *Include related objects*. Esto confirma que cualquier integrante, o el catedrático, puede reconstruir la detección del Blue Team solo con el repositorio.
+
+![Import del export en otro Kibana y export de los saved objects](img/08-saved-objects-export.png)
 
 ---
 
